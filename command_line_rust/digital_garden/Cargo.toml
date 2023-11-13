@@ -1,0 +1,28 @@
+[package]
+name = "digital_garden"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+# Rename the default Cargo binary to be different than the package name
+[[bin]]
+name = "garden"
+path = "src/main.rs"
+
+[lib]
+name = "digital_garden"
+path = "src/lib.rs"
+
+[dependencies]
+clap = { version = "4.4.7", features = ["derive", "env"] }
+color-eyre = "0.6.2"
+directories = "5.0.1"
+edit = "0.1.4"
+rprompt = "2.1.1"
+slug = "0.1.5"
+
+[dev-dependencies]
+assert_fs = "1.0.13"
+assert_cmd = "2.0.12"
+predicates = "3.0.4"
