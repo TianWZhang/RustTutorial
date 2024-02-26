@@ -3,7 +3,10 @@ use sea_orm::{ActiveModelTrait, DatabaseConnection};
 
 use crate::{database::users, utils::app_error::AppError};
 
-pub async fn save_active_user(db: &DatabaseConnection, user: users::ActiveModel) -> Result<users::ActiveModel, AppError> {
+pub async fn save_active_user(
+    db: &DatabaseConnection,
+    user: users::ActiveModel,
+) -> Result<users::ActiveModel, AppError> {
     user.save(db).await.map_err(|e| {
         let error_message = e.to_string();
 

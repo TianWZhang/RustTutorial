@@ -16,6 +16,9 @@ async fn main() {
             panic!();
         }
     };
-    let app_state = AppState { db, jwt_secret: TokenWrapper(jwt_secret) };
+    let app_state = AppState {
+        db,
+        jwt_secret: TokenWrapper(jwt_secret),
+    };
     run(app_state).await;
 }

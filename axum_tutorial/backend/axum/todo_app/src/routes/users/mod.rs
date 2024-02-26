@@ -1,4 +1,6 @@
 pub mod create_user;
+pub mod login;
+pub mod logout;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -14,7 +16,7 @@ pub struct ResponseUser {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct RequestCreateUser {
+pub struct RequestUser {
     username: String,
     password: String,
 }

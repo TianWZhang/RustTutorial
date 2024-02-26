@@ -1,7 +1,8 @@
 pub mod app_state;
 mod database;
-mod routes;
+mod middleware;
 mod queries;
+mod routes;
 pub mod utils;
 
 use app_state::AppState;

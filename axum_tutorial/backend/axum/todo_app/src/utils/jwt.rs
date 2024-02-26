@@ -1,7 +1,6 @@
 use crate::utils::app_error::AppError;
 use axum::http::StatusCode;
 use chrono::{Duration, Utc};
-use dotenvy_macro::dotenv;
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 
@@ -25,20 +24,20 @@ pub fn create_jwt(secret: &str, username: String) -> Result<String, AppError> {
     })
 }
 
-pub fn verify_jwt(token: &str) -> Result<bool, AppError> {
-    let secret = dotenv!("JWT_SECRET");
+pub fn verify_jwt(secret: &str, token: &str) -> Result<bool, AppError> {
     let decoding_key = DecodingKey::from_secret(secret.as_bytes());
-    decode::<Claims>(token, &decoding_key, &Validation::new(Algorithm::HS256)).map_err(
-        |e| match e.kind() {
-            jsonwebtoken::errors::ErrorKind::ExpiredSignature => AppError::new(
-                StatusCode::UNAUTHORIZED,
-                "Your session has expired, please log in again",
-            ),
-            _ => AppError::new(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Something went wrong, please try again",
-            ),
-        },
-    )?;
-    Ok(true)
+    let validation = Validation::new(Algorithm::HS256);
+    decode::<Claims>(token, &decoding_key, &validation)
+        .map_err(|e| match e.kind() {
+            jsonwebtoken::errors::ErrorKind::ExpiredSignature
+            | jsonwebtoken::errors::ErrorKind::InvalidToken
+            | jsonwebtoken::errors::ErrorKind::InvalidSignature => {
+                AppError::new(StatusCode::UNAUTHORIZED, "not authenticated")
+            }
+            _ => {
+                eprintln!("Error validating token: {:?}", e);
+                AppError::new(StatusCode::INTERNAL_SERVER_ERROR, "Error validating token")
+            }
+        })
+        .map(|_| true)
 }
