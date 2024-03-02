@@ -56,14 +56,19 @@ message Watermark {
     uint32 y = 2;
 }
 
+message PaddingBottom {
+    uint32 padding = 1;
+}
+
 message Spec {
     oneof data {
         Resize resize = 1;
         Crop crop = 2;
-        Flipv filpv = 3;
-        Fliph filph = 4;
+        Flipv flipv = 3;
+        Fliph fliph = 4;
         Contrast contrast = 5;
         Filter filter = 6;
         Watermark watermark = 7;
+        PaddingBottom paddingBottom = 8;
     }
 }

@@ -1,12 +1,12 @@
 use crate::pb::Spec;
-use image::ImageOutputFormat;
 
 mod photon;
 pub use photon::Photon;
 
 pub trait Engine {
     fn apply(&mut self, specs: &[Spec]);
-    fn generate(self, format: ImageOutputFormat) -> Vec<u8>;
+    // currently only supports JEPG
+    fn generate(self, quality: u8) -> Vec<u8>;
 }
 
 pub trait SpecTransform<T> {

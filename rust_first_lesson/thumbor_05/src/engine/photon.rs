@@ -1,11 +1,10 @@
-use std::io::Cursor;
-use bytes::Bytes;
-use image::{DynamicImage, ImageBuffer, ImageOutputFormat};
-use photon_rs::{effects, filters, multiple, native::open_image_from_bytes, transform, PhotonImage};
-use lazy_static::lazy_static;
-use crate::pb::*;
-
 use super::{Engine, SpecTransform};
+use crate::pb::*;
+use bytes::Bytes;
+use lazy_static::lazy_static;
+use photon_rs::{
+    effects, filters, multiple, native::open_image_from_bytes, transform, PhotonImage, Rgba,
+};
 
 lazy_static! {
     static ref WATERMARK: PhotonImage = {
@@ -26,23 +25,25 @@ impl TryFrom<Bytes> for Photon {
 }
 
 impl Engine for Photon {
-    fn apply(&mut self, specs: &[crate::Spec]) {
+    fn apply(&mut self, specs: &[Spec]) {
         for spec in specs.iter() {
             match spec.data {
                 Some(spec::Data::Crop(ref v)) => self.transform(v),
                 Some(spec::Data::Contrast(ref v)) => self.transform(v),
                 Some(spec::Data::Filter(ref v)) => self.transform(v),
-                Some(spec::Data::Filph(ref v)) => self.transform(v),
-                Some(spec::Data::Filpv(ref v)) => self.transform(v),
+                Some(spec::Data::Fliph(ref v)) => self.transform(v),
+                Some(spec::Data::Flipv(ref v)) => self.transform(v),
                 Some(spec::Data::Resize(ref v)) => self.transform(v),
                 Some(spec::Data::Watermark(ref v)) => self.transform(v),
+                Some(spec::Data::PaddingBottom(ref v)) => self.transform(v),
                 _ => {}
             }
         }
     }
 
-    fn generate(self, format: image::ImageOutputFormat) -> Vec<u8> {
-        image_to_buf(self.0, format)
+    fn generate(self, quality: u8) -> Vec<u8> {
+        // image_to_buf(self.0, format)
+        self.0.get_bytes_jpeg(quality)
     }
 }
 
@@ -82,8 +83,15 @@ impl SpecTransform<&Filter> for Photon {
 impl SpecTransform<&Resize> for Photon {
     fn transform(&mut self, op: &Resize) {
         let img = match resize::ResizeType::try_from(op.rtype).unwrap() {
-            resize::ResizeType::Normal => transform::resize(&mut self.0, op.width, op.height, resize::SampleFilter::try_from(op.filter).unwrap().into()),
-            resize::ResizeType::SeamCarve => transform::seam_carve(&mut self.0, op.width, op.height)
+            resize::ResizeType::Normal => transform::resize(
+                &mut self.0,
+                op.width,
+                op.height,
+                resize::SampleFilter::try_from(op.filter).unwrap().into(),
+            ),
+            resize::ResizeType::SeamCarve => {
+                transform::seam_carve(&mut self.0, op.width, op.height)
+            }
         };
         self.0 = img;
     }
@@ -95,15 +103,9 @@ impl SpecTransform<&Watermark> for Photon {
     }
 }
 
-fn image_to_buf(img: PhotonImage, format: ImageOutputFormat) -> Vec<u8> {
-    let raw_pixels = img.get_raw_pixels();
-    let width = img.get_width();
-    let height = img.get_height();
-
-    let img_buffer = ImageBuffer::from_vec(width, height, raw_pixels).unwrap();
-    let dynimage = DynamicImage::ImageRgb8(img_buffer);
-
-    let mut buffer = Vec::with_capacity(32768);
-    dynimage.write_to(&mut Cursor::new(&mut buffer), format).unwrap();
-    buffer
+impl SpecTransform<&PaddingBottom> for Photon {
+    fn transform(&mut self, op: &PaddingBottom) {
+        let padding_rgba = Rgba::new(255, 255, 255, 255);
+        self.0 = transform::padding_bottom(&mut self.0, op.padding, padding_rgba);
+    }
 }
