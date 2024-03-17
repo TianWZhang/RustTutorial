@@ -5,8 +5,9 @@ use std::{
     pin::Pin,
     sync::{Arc, Mutex},
     task::{Context, Poll, Wake, Waker},
-    thread::{self, Thread},
+    thread,
 };
+use crate::parker::Parker;
 
 type Task = Pin<Box<dyn Future<Output = ()>>>;
 // Define a thread-local static variable that's unique to the thread it's first called from.
@@ -29,6 +30,7 @@ struct ExecutorCore {
     // the task ID to ready_queue.
     ready_queue: Arc<Mutex<Vec<usize>>>,
     next_id: Cell<usize>,
+    parker: Arc<Parker>
 }
 
 pub fn spawn<F>(future: F)
@@ -60,9 +62,10 @@ impl Executor {
     }
 
     fn get_waker(&self, id: usize) -> Arc<MyWaker> {
+        let parker = CURRENT_EXEC.with(|e| e.parker.clone());
         Arc::new(MyWaker {
             id,
-            thread: thread::current(),
+            parker,
             ready_queue: CURRENT_EXEC.with(|e| e.ready_queue.clone()),
         })
     }
@@ -104,7 +107,7 @@ impl Executor {
                 );
                 // Parking the thread will yield control to the OS scheduler, and the Executor
                 // does nothing until it's woken up again.
-                thread::park();
+                CURRENT_EXEC.with(|e| e.parker.park());
             } else {
                 println!("{}: All tasks are finished", name);
                 break;
@@ -115,7 +118,7 @@ impl Executor {
 
 #[derive(Clone)]
 pub struct MyWaker {
-    thread: Thread,
+    parker: Arc<Parker>,
     /// which task this Waker is associated with
     id: usize,
     /// A reference that can be shared between threads to a Vec<usize>,
@@ -132,6 +135,6 @@ impl Wake for MyWaker {
             // push the task id that this Waker is associated with onto the ready queue
             .map(|mut q| q.push(self.id))
             .unwrap();
-        self.thread.unpark();
+        self.parker.unpark();
     }
 }
