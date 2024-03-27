@@ -1,26 +1,41 @@
 use std::{
-    cell::UnsafeCell,
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
-    thread::{self, spawn},
+    cell::UnsafeCell, ops::{Deref, DerefMut}, sync::atomic::{AtomicBool, AtomicUsize, Ordering}, thread::{self, spawn}
 };
 
-pub struct MyMutex<T> {
+/// A regular mutex will put your thread to sleep when the mutex is already locked. This
+/// avoids wasting resources while waiting for the lock to be released. If a lock is only
+/// ever held for very brief moments, it might get lower latency for threads to repeatedly
+/// try to lock it without actually going to sleep. A spin lock is a mutex that does exactly this. 
+pub struct SpinLock<T> {
     locked: AtomicBool,
+    // Since this data can be accessed exclusively even though the spin lock itself is shared, 
+    // we need to use interior mutability.
     v: UnsafeCell<T>,
 }
 
-// implement Sync for MyMutex so that we can concurrently access it from multiple threads
+// implement Sync for SpinLock so that we can concurrently access it from multiple threads
 // T is Send bound because the inner value can be taken from multiple threads.
 // T is not Sync bound because we never concurrently access the inner value from multiple
 // threads at the same time.
-unsafe impl<T: Send> Sync for MyMutex<T> {}
+unsafe impl<T: Send> Sync for SpinLock<T> {}
 
-impl<T> MyMutex<T> {
-    pub fn new(t: T) -> Self {
+impl<T> SpinLock<T> {
+    pub const fn new(t: T) -> Self {
         Self {
             locked: AtomicBool::new(false),
             v: UnsafeCell::new(t),
         }
+    }
+
+    pub fn lock(&self) -> Guard<T>{
+        // To make sure after locking it, we can safely assume that whatever happened
+        // during the last time it was locked has already happened.
+        while self.locked.swap(true, Ordering::Acquire) {
+            // inform the processor of a spin loop, which might increase
+            // its efficiency
+            std::hint::spin_loop();
+        }
+        Guard { lock: self }
     }
 
     pub fn with_lock<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
@@ -65,6 +80,36 @@ impl<T> MyMutex<T> {
         // unlock it so that other threads can access the value
         self.locked.store(false, Ordering::Release);
         res
+    }
+}
+
+// the Guard cannot outlive the SpinLock
+pub struct Guard<'a, T> {
+    lock: &'a SpinLock<T>
+}
+
+impl<T> Deref for Guard<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        // Safety: The very existence of this Guard
+        // guarantees we've exclusively locked the lock.
+        unsafe { &*self.lock.v.get() }
+    }
+}
+
+impl<T> DerefMut for Guard<'_, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        // Safety: The very existence of this Guard
+        // guarantees we've exclusively locked the lock.
+        unsafe { &mut *self.lock.v.get() }
+    }
+}
+
+/// tie the unlocking operation to the end of the Guard
+impl<T> Drop for Guard<'_, T> {
+    fn drop(&mut self) {
+        self.lock.locked.store(false, Ordering::Release);
     }
 }
 
@@ -123,8 +168,8 @@ fn main() {
 }
 
 #[test]
-fn test_mymutex() {
-    let l: &'static _ = Box::leak(Box::new(MyMutex::new(0)));
+fn test_spinlock1() {
+    let l: &'static _ = Box::leak(Box::new(SpinLock::new(0)));
     let handles: Vec<_> = (0..100)
         .map(|_| {
             thread::spawn(move || {
@@ -140,6 +185,21 @@ fn test_mymutex() {
         handle.join().unwrap();
     }
     assert_eq!(l.with_lock(|v| *v), 100000);
+}
+
+#[test]
+fn test_spinlock2() {
+    let x = SpinLock::new(Vec::new());
+    thread::scope(|s| {
+        s.spawn(|| x.lock().push(1));
+        s.spawn(|| {
+            let mut g = x.lock();
+            g.push(2);
+            g.push(2);
+        });
+    });
+    let g = x.lock();
+    assert!(g.as_slice() == [1, 2, 2] || g.as_slice() == [2, 2, 1]);
 }
 
 #[test]

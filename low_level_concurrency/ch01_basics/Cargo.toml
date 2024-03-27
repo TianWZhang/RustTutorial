@@ -1,0 +1,42 @@
+[package]
+name = "ch01_basics"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "scoped_threads"
+test = false
+bench = false
+
+[[bin]]
+name = "thread_return_value"
+test = false
+bench = false
+
+[[bin]]
+name = "leaking"
+test = false
+bench = false
+
+[[bin]]
+name = "shared_ownership"
+test = false
+bench = false
+
+[[bin]]
+name = "send_sync"
+test = false
+bench = false
+
+[[bin]]
+name = "thread_parking"
+test = false
+bench = false
+
+[[bin]]
+name = "condvar"
+test = false
+bench = false
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
